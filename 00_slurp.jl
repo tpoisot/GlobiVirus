@@ -3,37 +3,43 @@ using JSON3
 
 const _globi_root = "https://api.globalbioticinteractions.org/"
 
-# TODO: get the list of interactionType and work from this one, keeping in mind that they
-# are all symetrical so only need to pick one
-# See e.g.
-# https://api.globalbioticinteractions.org/interactionTypes
+function interactiontypes()
+    url = "https://api.globalbioticinteractions.org/interactionTypes?format=json.v2"
+    req = HTTP.get(url)
+    return JSON3.read(req.body)
+end
 
-# TODO: need to change the search strategy a little bit
-# Specifically - use the taxon endpoint and then go through all types of interaction with
-# the includeObservations flag set to true
-# Se e.g.
-# https://api.globalbioticinteractions.org/taxon/Callinectes%20sapidus/preyedUponBy?includeObservations=true
+function construct_url(root, taxon, itype, default_params, offset=0)
+    p_string = ["$(p.first)=$(p.second)" for p in default_params]
+    push!(p_string, "offset=$(offset)")
+    url = root * "taxon/$(taxon)/$(itype)?" * join(p_string, "&")
+    return url
+end
 
-function allint_getter(taxon::String, source::Bool=true)
+function interactions(taxon::String, itype::String)
+    query_parameters = ["format" => "json.v2", "includeObservations" => true]
     output = []
-    stem = source ? "sourceTaxon" : "targetTaxon"
     keepgoing = true
     while keepgoing
-        @info length(output)
-        url = _globi_root * "interaction?" * stem * "=" * taxon * "&offset=$(length(output))" * "&taxonIdPrefix=NCBI"
+        url = construct_url(_globi_root, taxon, itype, query_parameters, length(output))
         req = HTTP.get(url)
         js = JSON3.read(req.body)
         out = [Dict(zip(js.columns, jd)) for jd in js.data]
         keepgoing = !isempty(js.data)
         append!(output, out)
     end
-    return output
+    return unique(output)
 end
 
+types = interactiontypes()
+
 for org in ["Virus", "Viruses"]
-    int = allint_getter(org, true)
-    open("$(org).json", "w") do io
-        JSON3.pretty(io, int)
+    for it in String.(collect(keys(types)))
+        @info "$(org) $(it)"
+        int = interactions(org, it)
+        open("$(org)-$(it).json", "w") do io
+            JSON3.pretty(io, int)
+        end
     end
 end
 
