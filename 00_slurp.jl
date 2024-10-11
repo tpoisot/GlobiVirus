@@ -17,7 +17,7 @@ function construct_url(root, taxon, itype, default_params, offset=0)
 end
 
 function interactions(taxon::String, itype::String)
-    query_parameters = ["format" => "json.v2", "includeObservations" => true]
+    query_parameters = ["format" => "json", "includeObservations" => true]
     output = []
     keepgoing = true
     while keepgoing
@@ -33,12 +33,14 @@ end
 
 types = interactiontypes()
 
-for org in ["Virus", "Viruses"]
+for org in ["Viruses", "Virus"]
     for it in String.(collect(keys(types)))
-        @info "$(org) $(it)"
-        int = interactions(org, it)
-        open("$(org)-$(it).json", "w") do io
-            JSON3.pretty(io, int)
+        if ~isfile("$(org)-$(it).json")
+            @info "$(org) $(it)"
+            int = interactions(org, it)
+            open("$(org)-$(it).json", "w") do io
+                JSON3.pretty(io, int)
+            end
         end
     end
 end
