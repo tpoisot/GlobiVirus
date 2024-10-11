@@ -27,6 +27,7 @@ function interactions(taxon::String, itype::String)
         out = [Dict(zip(js.columns, jd)) for jd in js.data]
         keepgoing = !isempty(js.data)
         append!(output, out)
+        @info "\t$(length(output)) hits so far"
     end
     return unique(output)
 end
