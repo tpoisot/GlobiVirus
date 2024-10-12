@@ -45,14 +45,27 @@ int_target = DBInterface.execute(db, query_interaction_target) |> DataFrame
 
 # List of predictions with feasible interactions that come from a prediction
 query_predicted = """SELECT
-    DISTINCT sourceTaxonGenusName, targetTaxonGenusName, COUNT(*) as hits
+    DISTINCT sourceTaxonFamilyName, targetTaxonOrderName, COUNT(*) as hits, COUNT(DISTINCT sourceTaxonName) AS virus, COUNT(DISTINCT targetTaxonName) AS host
     FROM interactions
     WHERE (sourceTaxonKingdomName LIKE "%virae") 
-    AND (sourceBasisOfRecordName = "predictions")
-    GROUP BY sourceTaxonGenusName, targetTaxonGenusName
+    AND (NOT sourceBasisOfRecordName = "prediction")
+    GROUP BY sourceTaxonFamilyName, targetTaxonOrderName
     ORDER BY hits DESC
 """
-DBInterface.execute(db, query_predicted)
+DBInterface.execute(db, query_predicted) |> DataFrame
+
+# Quality of evidence for Chiroptera - Coronaviridae
+query_corobat = """SELECT
+    DISTINCT sourceTaxonGenusName, targetTaxonSpeciesName, sourceBasisOfRecordName, COUNT(*) as hits
+    FROM interactions 
+    WHERE (sourceTaxonFamilyName = "Coronaviridae")
+    AND (targetTaxonOrderName = "Chiroptera")
+    AND (sourceTaxonGenusName IS NOT "")
+    AND (targetTaxonSpeciesName IS NOT "")
+    GROUP BY sourceTaxonGenusName, targetTaxonSpeciesName, sourceBasisOfRecordName
+    ORDER BY hits DESC
+"""
+DBInterface.execute(db, query_corobat) |> DataFrame
 
 DBInterface.execute(
     db,
