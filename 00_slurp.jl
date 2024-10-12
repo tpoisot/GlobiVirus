@@ -1,48 +1,63 @@
-using HTTP
-using JSON3
+# Working from release 0.7 of
+# https://zenodo.org/records/11552565
 
-const _globi_root = "https://api.globalbioticinteractions.org/"
+using SQLite
+using DataFrames
 
-function interactiontypes()
-    url = "https://api.globalbioticinteractions.org/interactionTypes?format=json.v2"
-    req = HTTP.get(url)
-    return JSON3.read(req.body)
-end
+path = "globi.db"
 
-function construct_url(root, taxon, itype, default_params, offset=0)
-    p_string = ["$(p.first)=$(p.second)" for p in default_params]
-    push!(p_string, "offset=$(offset)")
-    url = root * "taxon/$(taxon)/$(itype)?" * join(p_string, "&")
-    return url
-end
+db = SQLite.DB(path)
 
-function interactions(taxon::String, itype::String)
-    query_parameters = ["format" => "json", "includeObservations" => true]
-    output = []
-    keepgoing = true
-    while keepgoing
-        url = construct_url(_globi_root, taxon, itype, query_parameters, length(output))
-        req = HTTP.get(url)
-        js = JSON3.read(req.body)
-        out = [Dict(zip(js.columns, jd)) for jd in js.data]
-        keepgoing = !isempty(js.data)
-        append!(output, out)
-        @info "\t$(length(output)) hits so far"
-    end
-    return unique(output)
-end
+q = """
+    SELECT sourceTaxonName, interactionTypeName, targetTaxonName, COUNT(interactionTypeName) AS hits
+    FROM interactions
+    WHERE
+        (sourceTaxonKingdomName LIKE "%virae") AND
+        (NOT interactionTypeName = "hasHost") AND
+        (NOT interactionTypeName = "pathogenOf")
+    GROUP BY
+        sourceTaxonName, interactionTypeName, targetTaxonName
+    ORDER BY
+        hits DESC
+    LIMIT 1000
+    """
 
-types = interactiontypes()
+out = DBInterface.execute(db, q) |> DataFrame
 
-for org in ["Viruses", "Virus"]
-    for it in String.(collect(keys(types)))
-        if ~isfile("$(org)-$(it).json")
-            @info "$(org) $(it)"
-            int = interactions(org, it)
-            open("$(org)-$(it).json", "w") do io
-                JSON3.pretty(io, int)
-            end
-        end
-    end
-end
+# Predicted interactions
 
+DBInterface.execute(
+    db,
+    """
+SELECT sourceTaxonName, interactionTypeName, targetTaxonName
+FROM interactions AS i1
+WHERE
+    (sourceTaxonKingdomName LIKE "%virae") AND
+    (sourceBasisOfRecordName = "prediction")
+ORDER BY
+    sourceTaxonName, targetTaxonName
+LIMIT 2000
+"""
+) |> DataFrame
+
+# Interactions that make no sense
+
+DBInterface.execute(
+    db,
+    """
+SELECT DISTINCT sourceTaxonName, sourceTaxonGenusName, interactionTypeName, COUNT(*) AS hits
+FROM interactions AS i1
+WHERE
+    (sourceTaxonKingdomName LIKE "%virae") AND
+    (NOT interactionTypeName = "hasHost") AND
+    (NOT interactionTypeName = "hasVector") AND
+    (NOT interactionTypeName = "pathogenOf") AND
+    (NOT interactionTypeName = "interactsWith") AND
+    (NOT interactionTypeName = "endoparasiteOf")
+GROUP BY
+    sourceTaxonName, interactionTypeName
+ORDER BY
+    hits DESC
+LIMIT 200
+"""
+) |> DataFrame
