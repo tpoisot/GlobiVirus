@@ -24,23 +24,35 @@ q = """
 
 out = DBInterface.execute(db, q) |> DataFrame
 
-# Predicted interactions
-
-DBInterface.execute(
-    db,
-    """
-SELECT sourceTaxonName, interactionTypeName, targetTaxonName
-FROM interactions AS i1
-WHERE
-    (sourceTaxonKingdomName LIKE "%virae") AND
-    (sourceBasisOfRecordName = "prediction")
-ORDER BY
-    sourceTaxonName, targetTaxonName
-LIMIT 2000
+# List number of records for each interaction type for viruses
+query_interaction_source = """SELECT
+    DISTINCT interactionTypeName, COUNT(*) AS hits, COUNT(DISTINCT sourceTaxonName) AS virus, COUNT(DISTINCT targetTaxonName) AS other
+    FROM interactions
+    WHERE (sourceTaxonKingdomName LIKE "%virae") 
+    GROUP BY interactionTypeName
+    ORDER BY hits DESC
 """
-) |> DataFrame
+query_interaction_target = """SELECT
+    DISTINCT interactionTypeName, COUNT(*) AS hits, COUNT(DISTINCT sourceTaxonName) AS other, COUNT(DISTINCT targetTaxonName) AS virus
+    FROM interactions
+    WHERE (targetTaxonKingdomName LIKE "%virae")
+    GROUP BY interactionTypeName
+    ORDER BY hits DESC
+"""
+int_source = DBInterface.execute(db, query_interaction_source) |> DataFrame
+int_target = DBInterface.execute(db, query_interaction_target) |> DataFrame
 
-# Interactions that make no sense
+
+# List of predictions with feasible interactions that come from a prediction
+query_predicted = """SELECT
+    DISTINCT sourceTaxonGenusName, targetTaxonGenusName, COUNT(*) as hits
+    FROM interactions
+    WHERE (sourceTaxonKingdomName LIKE "%virae") 
+    AND (sourceBasisOfRecordName = "predictions")
+    GROUP BY sourceTaxonGenusName, targetTaxonGenusName
+    ORDER BY hits DESC
+"""
+DBInterface.execute(db, query_predicted)
 
 DBInterface.execute(
     db,
