@@ -1,0 +1,1 @@
+cat interactions.csv.gz | gunzip | sqlite3 -csv globi.db '.import /dev/stdin interactions'

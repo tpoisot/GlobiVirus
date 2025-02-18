@@ -14,6 +14,7 @@ q = """
     WHERE
         (sourceTaxonKingdomName LIKE "%virae") AND
         (NOT interactionTypeName = "hasHost") AND
+        (NOT interactionTypeName = "endoparasiteOf") AND
         (NOT interactionTypeName = "pathogenOf")
     GROUP BY
         sourceTaxonName, interactionTypeName, targetTaxonName
@@ -23,6 +24,22 @@ q = """
     """
 
 out = DBInterface.execute(db, q) |> DataFrame
+
+# Interactions between viruses
+q = """
+    SELECT sourceTaxonName, interactionTypeName, targetTaxonName, COUNT(interactionTypeName) AS hits
+    FROM interactions
+    WHERE
+        (sourceTaxonKingdomName LIKE "%virae") AND
+        (targetTaxonKingdomName LIKE "%virae")
+    GROUP BY
+        sourceTaxonName, interactionTypeName, targetTaxonName
+    ORDER BY
+        hits DESC
+    LIMIT 1000
+    """
+out = DBInterface.execute(db, q) |> DataFrame
+
 
 # List number of records for each interaction type for viruses
 query_interaction_source = """SELECT
